@@ -1,6 +1,6 @@
 # Evaluating LLMs
 
-Slides can be found [here](https://docs.google.com/presentation/d/1NB7AxwV8mIaJbh9a93yPPCN2PFskLdZ_we0psqrCIJc/edit?usp=sharing).
+Slides can be found [here](https://docs.google.com/presentation/d/16pWz4G3BQkuGU80vIsxeXRHYFbAoQOyKwWRasG40P5s).
 
 ## Lab Assignment
 
