@@ -1,47 +1,57 @@
-from llmsherpa.readers import LayoutPDFReader
-from IPython.core.display import display, HTML
-from llama_index.llms.ollama import Ollama
-from llama_index.core import VectorStoreIndex
-from llama_index.core import Document, ServiceContext, Settings
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.core import Settings
+import os
+import requests
+from llmsherpa.readers import Document
+from llama_index.llms.groq import Groq
 
-# Source: https://medium.com/@jitsins/query-complex-pdfs-in-natural-language-with-llmsherpa-ollama-llama3-8b-13b4782243de
-# To install:
-# 1. run https://stackoverflow.com/questions/52805115/certificate-verify-failed-unable-to-get-local-issuer-certificate
-# 2. install and run ollama:
-# ollama pull llama3
-# ollama run llama3
-# 3. Install docker and run:
-# docker pull ghcr.io/nlmatics/nlm-ingestor:latest
-# docker run -p 5010:5001 ghcr.io/nlmatics/nlm-ingestor:latest
-# This will expose the api link “http://localhost:5010/api/parseDocument?renderFormat=all” for you to utilize in your code.
 
-# Initialize LLm
-llm = Ollama(model="llama3", request_timeout=60.0)
+my_groq_key = ""
+os.environ["GROQ_API_KEY"] = my_groq_key.strip()
+print(f"Key set (length: {len(my_groq_key)} characters). Connection...")
+try:
+    llm = Groq(model="llama-3.3-70b-versatile", api_key=my_groq_key)
+except Exception as e:
+    print(f"Error config Groq: {e}")
+    exit()
 
-llmsherpa_api_url = "http://localhost:5010/api/parseDocument?renderFormat=all"
-pdf_url = "https://abc.xyz/assets/91/b3/3f9213d14ce3ae27e1038e01a0e0/2024q1-alphabet-earnings-release-pdf.pdf"
-pdf_reader = LayoutPDFReader(llmsherpa_api_url)
+api_url = "http://127.0.0.1:5010/api/parseDocument?renderFormat=all"
+pdf_path = os.path.join(os.getcwd(), "2024q1-alphabet-earnings-release-pdf.pdf")
 
-# Read PDF
-doc = pdf_reader.read_pdf(pdf_url)
+try:
+    with open(pdf_path, 'rb') as f:
+        print("2. Docker: Analisi PDF...")
+        response = requests.post(api_url, files={'file': f})
+        response.raise_for_status()
+        json_data = response.json()
+        
+        if 'return_dict' in json_data:
+            blocks_data = json_data['return_dict']['result']['blocks']
+        else:
+            blocks_data = json_data.get('returnDict', {}).get('result', {}).get('blocks')
 
-# Get data from the Section by Title
+except Exception as e:
+    print(f"Error Docker: {e}")
+    exit()
+
+doc = Document(blocks_data)
 selected_section = None
 for section in doc.sections():
     if 'Q1 2024 Financial Highlights' in section.title:
         selected_section = section
         break
 
-# Convert the output in HTML format
-context = selected_section.to_html(include_children=True, recurse=True)
-question = "What was Google's operating margin for 2024"
-resp = llm.complete(
-    f"read this table and answer question: {question}:\n{context}")
-print(resp.text)
+if not selected_section:
+    print("Section not found")
+    exit()
 
-question = "What % Net income is of the Revenues?"
-resp = llm.complete(
-    f"read this table and answer question: {question}:\n{context}")
-print(resp.text)
+context = selected_section.to_html(include_children=True, recurse=True)
+
+questions = [
+    "What was Google's operating margin for 2024?",
+    "What % Net income is of the Revenues?"
+]
+
+print("\n--- GROQ RESPONSE ---")
+for q in questions:
+    print(f"\nQuestion: {q}")
+    resp = llm.complete(f"Read the table inside the Context carefully. Answer the Question concisely using only the data provided.\nContext: {context}\nQuestion: {q}")
+    print(f"Response: {resp.text}")
